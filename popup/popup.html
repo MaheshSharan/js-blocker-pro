@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JS Blocker Pro</title>
+  <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h2>JS Blocker Pro</h2>
+    <div class="toggle-container">
+      <label class="switch">
+        <input type="checkbox" id="jsToggle">
+        <span class="slider"></span>
+      </label>
+      <span id="status">JavaScript Enabled</span>
+    </div>
+    <h3>Blocked Scripts</h3>
+    <textarea id="blockedScripts" placeholder="Enter URLs of scripts to block, one per line"></textarea>
+    <button id="saveBlockedScripts">Save Blocked Scripts</button>
+    <div id="saveMessage" class="message"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
