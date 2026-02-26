@@ -12,6 +12,69 @@
     constructor() {
       this.behaviorFlags = new Map();
       this.monitoringActive = false;
+      this.permissionPromptEnabled = true;
+      this.allowedActions = new Map(); // scriptUrl -> Set of allowed actions
+      this.pendingRequests = new Map(); // requestId -> resolve function
+    }
+
+    setPermissionPromptEnabled(enabled) {
+      this.permissionPromptEnabled = enabled;
+    }
+
+    async requestPermission(scriptUrl, action, category) {
+      // Check if already allowed
+      const allowed = this.allowedActions.get(scriptUrl);
+      if (allowed && allowed.has(action)) {
+        return true;
+      }
+
+      // If prompts disabled, allow by default
+      if (!this.permissionPromptEnabled) {
+        return true;
+      }
+
+      // Create permission request
+      const requestId = `${Date.now()}-${Math.random()}`;
+      
+      return new Promise((resolve) => {
+        this.pendingRequests.set(requestId, resolve);
+        
+        // Send message to background to show prompt
+        chrome.runtime.sendMessage({
+          action: 'showPermissionPrompt',
+          requestId: requestId,
+          scriptUrl: scriptUrl,
+          actionType: action,
+          category: category
+        });
+
+        // Timeout after 30 seconds - default to block
+        setTimeout(() => {
+          if (this.pendingRequests.has(requestId)) {
+            this.pendingRequests.delete(requestId);
+            resolve(false);
+          }
+        }, 30000);
+      });
+    }
+
+    handlePermissionResponse(requestId, decision, scriptUrl, actionType) {
+      const resolve = this.pendingRequests.get(requestId);
+      if (!resolve) return;
+
+      this.pendingRequests.delete(requestId);
+
+      if (decision === 'allow-always') {
+        if (!this.allowedActions.has(scriptUrl)) {
+          this.allowedActions.set(scriptUrl, new Set());
+        }
+        this.allowedActions.get(scriptUrl).add(actionType);
+        resolve(true);
+      } else if (decision === 'allow-once') {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
     }
 
     start() {
@@ -108,10 +171,17 @@
       const OriginalRTC = window.RTCPeerConnection;
       const self = this;
       
-      window.RTCPeerConnection = function(...args) {
+      window.RTCPeerConnection = async function(...args) {
         const scriptId = self.getScriptIdentifier();
-        self.addFlag(scriptId, 'webrtc-probe');
-        return new OriginalRTC(...args);
+        const allowed = await self.requestPermission(scriptId, 'webrtc-probe', 'tracking');
+        
+        if (allowed) {
+          self.addFlag(scriptId, 'webrtc-probe');
+          return new OriginalRTC(...args);
+        } else {
+          self.addFlag(scriptId, 'webrtc-probe-blocked');
+          throw new Error('WebRTC access denied by user');
+        }
       };
     }
 
@@ -161,10 +231,17 @@
       const originalInstantiate = WebAssembly.instantiate;
       const self = this;
       
-      WebAssembly.instantiate = function(...args) {
+      WebAssembly.instantiate = async function(...args) {
         const scriptId = self.getScriptIdentifier();
-        self.addFlag(scriptId, 'wasm-usage');
-        return originalInstantiate.apply(this, arguments);
+        const allowed = await self.requestPermission(scriptId, 'wasm-load', 'suspicious');
+        
+        if (allowed) {
+          self.addFlag(scriptId, 'wasm-usage');
+          return originalInstantiate.apply(this, arguments);
+        } else {
+          self.addFlag(scriptId, 'wasm-usage-blocked');
+          throw new Error('WebAssembly instantiation denied by user');
+        }
       };
     }
 
@@ -173,16 +250,31 @@
       const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
       const self = this;
 
-      HTMLCanvasElement.prototype.toDataURL = function(...args) {
+      HTMLCanvasElement.prototype.toDataURL = async function(...args) {
         const scriptId = self.getScriptIdentifier();
-        self.addFlag(scriptId, 'fingerprint-canvas');
-        return originalToDataURL.apply(this, arguments);
+        const allowed = await self.requestPermission(scriptId, 'canvas-read', 'fingerprinting');
+        
+        if (allowed) {
+          self.addFlag(scriptId, 'fingerprint-canvas');
+          return originalToDataURL.apply(this, arguments);
+        } else {
+          self.addFlag(scriptId, 'fingerprint-canvas-blocked');
+          return 'data:,'; // Return empty data URL
+        }
       };
 
-      CanvasRenderingContext2D.prototype.getImageData = function(...args) {
+      CanvasRenderingContext2D.prototype.getImageData = async function(...args) {
         const scriptId = self.getScriptIdentifier();
-        self.addFlag(scriptId, 'fingerprint-canvas');
-        return originalGetImageData.apply(this, arguments);
+        const allowed = await self.requestPermission(scriptId, 'canvas-read', 'fingerprinting');
+        
+        if (allowed) {
+          self.addFlag(scriptId, 'fingerprint-canvas');
+          return originalGetImageData.apply(this, arguments);
+        } else {
+          self.addFlag(scriptId, 'fingerprint-canvas-blocked');
+          // Return empty ImageData
+          return new ImageData(1, 1);
+        }
       };
     }
 
@@ -485,6 +577,17 @@
       sendResponse({ flags: behaviorMonitor.getFlags() });
     } else if (request.action === 'getDependencies') {
       sendResponse({ dependencies: dependencyTracker.getDependencies() });
+    } else if (request.action === 'permissionResponse') {
+      behaviorMonitor.handlePermissionResponse(
+        request.requestId,
+        request.decision,
+        request.scriptUrl,
+        request.actionType
+      );
+      sendResponse({ success: true });
+    } else if (request.action === 'setPermissionPromptEnabled') {
+      behaviorMonitor.setPermissionPromptEnabled(request.enabled);
+      sendResponse({ success: true });
     }
     return true;
   });

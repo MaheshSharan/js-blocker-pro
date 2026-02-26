@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Main view elements
   const jsToggle = document.getElementById('jsToggle');
   const status = document.getElementById('status');
+  const permissionToggle = document.getElementById('permissionToggle');
+  const permissionStatus = document.getElementById('permissionStatus');
   const blockedScripts = document.getElementById('blockedScripts');
   const saveBlockedScripts = document.getElementById('saveBlockedScripts');
   const saveMessage = document.getElementById('saveMessage');
@@ -28,9 +30,14 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentMode = 'normal';
 
   // Load initial state
-  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds', 'controlMode'], function(data) {
+  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds', 'controlMode', 'permissionPromptsEnabled'], function(data) {
     jsToggle.checked = data.jsDisabled || false;
     status.textContent = data.jsDisabled ? 'JavaScript Disabled' : 'JavaScript Enabled';
+    
+    const promptsEnabled = data.permissionPromptsEnabled !== false; // Default true
+    permissionToggle.checked = promptsEnabled;
+    permissionStatus.textContent = promptsEnabled ? 'Permission Prompts Enabled' : 'Permission Prompts Disabled';
+    
     blockedScripts.value = (data.blockedScripts || []).join('\n');
     disabledScriptIds = new Set(data.disabledScriptIds || []);
     currentMode = data.controlMode || 'normal';
@@ -43,6 +50,24 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.storage.sync.set({jsDisabled: isDisabled});
     status.textContent = isDisabled ? 'JavaScript Disabled' : 'JavaScript Enabled';
     chrome.runtime.sendMessage({action: "toggleJS", value: isDisabled});
+  });
+
+  permissionToggle.addEventListener('change', function() {
+    const enabled = permissionToggle.checked;
+    chrome.storage.sync.set({permissionPromptsEnabled: enabled});
+    permissionStatus.textContent = enabled ? 'Permission Prompts Enabled' : 'Permission Prompts Disabled';
+    
+    // Notify all tabs
+    chrome.tabs.query({}, function(tabs) {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'setPermissionPromptEnabled',
+          enabled: enabled
+        }).catch(() => {}); // Ignore errors for tabs without content script
+      });
+    });
+    
+    showMessage(enabled ? 'Permission prompts enabled' : 'Permission prompts disabled', 'success');
   });
 
   saveBlockedScripts.addEventListener('click', function() {

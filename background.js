@@ -3,7 +3,8 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.sync.set({ 
       jsDisabled: false, 
       blockedScripts: [],
-      disabledScriptIds: []
+      disabledScriptIds: [],
+      permissionPromptsEnabled: true
     });
   });
   
@@ -12,8 +13,40 @@ chrome.runtime.onInstalled.addListener(() => {
       updateJSBlockingRules(request.value);
     } else if (request.action === "updateBlockedScripts") {
       updateScriptBlockingRules(request.value);
+    } else if (request.action === "showPermissionPrompt") {
+      showPermissionPrompt(request, sender.tab.id);
+    } else if (request.action === "permissionResponse") {
+      handlePermissionResponse(request, sender.tab.id);
     }
   });
+
+  function showPermissionPrompt(requestData, tabId) {
+    const params = new URLSearchParams({
+      script: requestData.scriptUrl,
+      action: requestData.actionType,
+      category: requestData.category,
+      requestId: requestData.requestId
+    });
+
+    chrome.windows.create({
+      url: `permission-prompt.html?${params.toString()}`,
+      type: 'popup',
+      width: 450,
+      height: 400,
+      focused: true
+    });
+  }
+
+  function handlePermissionResponse(response, tabId) {
+    // Forward response back to content script
+    chrome.tabs.sendMessage(tabId, {
+      action: 'permissionResponse',
+      requestId: response.requestId,
+      decision: response.decision,
+      scriptUrl: response.scriptUrl,
+      actionType: response.actionType
+    });
+  }
   
   function updateJSBlockingRules(isDisabled) {
     const rule = {
