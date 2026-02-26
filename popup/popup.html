@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JS Blocker Pro</title>
+  <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>JS Blocker Pro</h2>
+      <button id="scanBtn" class="icon-btn" title="Scan Scripts">🔍</button>
+    </div>
+    
+    <div id="mainView">
+      <div class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="jsToggle">
+          <span class="slider"></span>
+        </label>
+        <span id="status">JavaScript Enabled</span>
+      </div>
+      <h3>Blocked Scripts</h3>
+      <textarea id="blockedScripts" placeholder="Enter URLs of scripts to block, one per line"></textarea>
+      <button id="saveBlockedScripts">Save Blocked Scripts</button>
+      <div id="saveMessage" class="message"></div>
+    </div>
+
+    <div id="scanView" class="hidden">
+      <div class="scan-header">
+        <button id="backBtn" class="icon-btn">← Back</button>
+        <span class="scan-title">Script Intelligence</span>
+        <button id="rescanBtn" class="icon-btn" title="Rescan">🔄</button>
+      </div>
+      
+      <div class="scan-controls">
+        <button id="selectAllBtn" class="control-btn">Select All</button>
+        <button id="disableSelectedBtn" class="control-btn">Disable Selected</button>
+        <button id="allowSelectedBtn" class="control-btn">Allow Selected</button>
+      </div>
+
+      <div id="scanStatus" class="scan-status">Scanning...</div>
+      
+      <div id="scriptTable" class="script-table">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selectAllCheckbox"></th>
+              <th>Script</th>
+              <th>Source</th>
+              <th>Type</th>
+              <th>Timing</th>
+              <th>Size</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="scriptTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
