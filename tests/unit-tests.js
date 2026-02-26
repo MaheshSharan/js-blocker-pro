@@ -69,7 +69,7 @@ const JSBlockerTests = {
 
     // Test entropy calculation
     const lowEntropy = this.calculateEntropy('aaaa');
-    const highEntropy = this.calculateEntropy('a7f3k9m2');
+    const highEntropy = this.calculateEntropy('xK9mQ7wP5nR3tY8uI6oE4aS2dF1');
     this.assert(highEntropy > lowEntropy, 'High entropy > low entropy');
     this.assert(highEntropy > 4.5, 'Obfuscated filename has high entropy');
   },
