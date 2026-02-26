@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Scan view elements
   const scanBtn = document.getElementById('scanBtn');
   const backBtn = document.getElementById('backBtn');
-  const rescanBtn = document.getElementById('rescanBtn');
   const controlMode = document.getElementById('controlMode');
   const selectAllCheckbox = document.getElementById('selectAllCheckbox');
   const selectAllBtn = document.getElementById('selectAllBtn');
@@ -100,15 +99,34 @@ document.addEventListener('DOMContentLoaded', function() {
   // Scan functionality
   scanBtn.addEventListener('click', function() {
     showScanView();
-    performScan();
+    
+    // Get current tab and re-inject content script for fresh scan
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (!tabs[0]) {
+        scanStatus.textContent = 'Error: No active tab';
+        return;
+      }
+
+      const tabId = tabs[0].id;
+      
+      // Re-inject content script to ensure it's loaded
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['content.js']
+      }).then(() => {
+        // Small delay to let content script initialize
+        setTimeout(() => {
+          performScan();
+        }, 500);
+      }).catch((error) => {
+        // Content script might already be injected, just scan
+        performScan();
+      });
+    });
   });
 
   backBtn.addEventListener('click', function() {
     showMainView();
-  });
-
-  rescanBtn.addEventListener('click', function() {
-    performScan();
   });
 
   controlMode.addEventListener('change', function() {

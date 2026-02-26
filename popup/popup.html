@@ -8,7 +8,7 @@
   <div class="container">
     <div class="header">
       <h2>JS Blocker Pro</h2>
-      <button id="scanBtn" class="icon-btn" title="Scan Scripts">🔍</button>
+      <button id="scanBtn" class="scan-btn">Scan Scripts</button>
     </div>
     
     <div id="mainView">
@@ -36,9 +36,8 @@
 
     <div id="scanView" class="hidden">
       <div class="scan-header">
-        <button id="backBtn" class="icon-btn">← Back</button>
+        <button id="backBtn" class="text-btn">← Back</button>
         <span class="scan-title">Script Intelligence</span>
-        <button id="rescanBtn" class="icon-btn" title="Rescan">🔄</button>
       </div>
       
       <div class="scan-controls">
@@ -53,14 +52,14 @@
           </select>
         </div>
         <button id="selectAllBtn" class="control-btn">Select All</button>
-        <button id="disableSelectedBtn" class="control-btn">Disable Selected</button>
+        <button id="disableSelectedBtn" class="control-btn">Block Selected</button>
         <button id="allowSelectedBtn" class="control-btn">Allow Selected</button>
-        <button id="delaySelectedBtn" class="control-btn">⏱️ Delay</button>
+        <button id="delaySelectedBtn" class="control-btn">Delay Selected</button>
       </div>
 
       <div id="delayPanel" class="delay-panel hidden">
         <div class="delay-header">
-          <span>⏱️ Execution Timing Control</span>
+          <span>Execution Timing Control</span>
           <button id="closeDelayPanel" class="close-btn">✕</button>
         </div>
         <div class="delay-options">
@@ -111,7 +110,7 @@
 
       <div class="policy-builder" id="policyBuilder">
         <div class="policy-header">
-          <span>📋 Policy Builder</span>
+          <span>Policy Builder</span>
           <button id="togglePolicyBuilder" class="control-btn">Create Rule</button>
         </div>
         <div id="policyForm" class="policy-form hidden">
