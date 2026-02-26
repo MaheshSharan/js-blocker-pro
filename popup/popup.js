@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     aiSummary.innerHTML = `
-      <div class="ai-summary-title">🤖 AI Analysis</div>
+      <div class="ai-summary-title">AI Trust Analysis</div>
       <div class="ai-stats">
         <div class="ai-stat">
           <span class="ai-stat-label">Safe</span>
