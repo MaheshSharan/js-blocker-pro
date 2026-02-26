@@ -658,23 +658,242 @@
   }
 
   // ============================================================================
+  // EXECUTION TIMING CONTROLLER (PHASE 7)
+  // ============================================================================
+
+  class ExecutionTimingController {
+    constructor() {
+      this.delayedScripts = new Map(); // scriptUrl -> {element, config}
+      this.delayConfig = {};
+      this.userInteracted = false;
+      this.userScrolled = false;
+      this.originalCreateElement = document.createElement;
+      this.originalAppendChild = Node.prototype.appendChild;
+      this.originalInsertBefore = Node.prototype.insertBefore;
+    }
+
+    start() {
+      this.trackUserInteractions();
+      this.interceptScriptLoading();
+    }
+
+    setDelayConfig(config) {
+      this.delayConfig = config;
+    }
+
+    trackUserInteractions() {
+      const self = this;
+      
+      // Track first click
+      document.addEventListener('click', () => {
+        self.userInteracted = true;
+        self.executeDelayedScripts('interaction');
+      }, { once: true, capture: true });
+
+      // Track first scroll
+      document.addEventListener('scroll', () => {
+        self.userScrolled = true;
+        self.executeDelayedScripts('scroll');
+      }, { once: true, capture: true });
+    }
+
+    interceptScriptLoading() {
+      const self = this;
+
+      // Intercept createElement for script tags
+      document.createElement = function(tagName) {
+        const element = self.originalCreateElement.call(document, tagName);
+        
+        if (tagName.toLowerCase() === 'script') {
+          // Store original src setter
+          const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+          
+          Object.defineProperty(element, 'src', {
+            set: function(value) {
+              const scriptId = self.getScriptId(value);
+              const delaySettings = self.delayConfig[scriptId];
+              
+              if (delaySettings && self.shouldDelay(delaySettings)) {
+                // Store script for delayed execution
+                self.delayedScripts.set(value, {
+                  element: this,
+                  config: delaySettings,
+                  originalSrc: value
+                });
+                
+                // Don't set src yet - will be set when conditions are met
+                return;
+              }
+              
+              // Normal execution
+              originalSrcDescriptor.set.call(this, value);
+            },
+            get: function() {
+              return originalSrcDescriptor.get.call(this);
+            }
+          });
+        }
+        
+        return element;
+      };
+
+      // Intercept appendChild
+      Node.prototype.appendChild = function(child) {
+        if (child.tagName === 'SCRIPT' && child.src) {
+          const scriptId = self.getScriptId(child.src);
+          const delaySettings = self.delayConfig[scriptId];
+          
+          if (delaySettings && self.shouldDelay(delaySettings)) {
+            // Store for delayed execution
+            self.delayedScripts.set(child.src, {
+              element: child,
+              parent: this,
+              config: delaySettings,
+              originalSrc: child.src,
+              method: 'appendChild'
+            });
+            
+            // Don't append yet
+            return child;
+          }
+        }
+        
+        return self.originalAppendChild.call(this, child);
+      };
+
+      // Intercept insertBefore
+      Node.prototype.insertBefore = function(newNode, referenceNode) {
+        if (newNode.tagName === 'SCRIPT' && newNode.src) {
+          const scriptId = self.getScriptId(newNode.src);
+          const delaySettings = self.delayConfig[scriptId];
+          
+          if (delaySettings && self.shouldDelay(delaySettings)) {
+            // Store for delayed execution
+            self.delayedScripts.set(newNode.src, {
+              element: newNode,
+              parent: this,
+              referenceNode: referenceNode,
+              config: delaySettings,
+              originalSrc: newNode.src,
+              method: 'insertBefore'
+            });
+            
+            // Don't insert yet
+            return newNode;
+          }
+        }
+        
+        return self.originalInsertBefore.call(this, newNode, referenceNode);
+      };
+    }
+
+    getScriptId(url) {
+      // Try to match script URL to stored IDs
+      // This is a simplified version - in production you'd want better matching
+      for (const scriptId in this.delayConfig) {
+        if (scriptId.includes(this.simpleHash(url))) {
+          return scriptId;
+        }
+        // Also try direct URL match
+        if (url.includes(scriptId) || scriptId.includes(url)) {
+          return scriptId;
+        }
+      }
+      return null;
+    }
+
+    simpleHash(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash = hash & hash;
+      }
+      return Math.abs(hash).toString(36);
+    }
+
+    shouldDelay(delaySettings) {
+      const type = delaySettings.type;
+      
+      if (type === 'interaction') {
+        return !this.userInteracted;
+      } else if (type === 'scroll') {
+        return !this.userScrolled;
+      } else if (type === 'time') {
+        // Time-based delays are always delayed initially
+        return true;
+      }
+      
+      return false;
+    }
+
+    executeDelayedScripts(triggerType) {
+      const scriptsToExecute = [];
+      
+      this.delayedScripts.forEach((data, url) => {
+        const config = data.config;
+        
+        // Check if this script should execute based on trigger
+        if (triggerType === 'interaction' && config.type === 'interaction') {
+          scriptsToExecute.push({ url, data });
+        } else if (triggerType === 'scroll' && config.type === 'scroll') {
+          scriptsToExecute.push({ url, data });
+        } else if (triggerType === 'time' && config.type === 'time') {
+          scriptsToExecute.push({ url, data });
+        }
+      });
+
+      // Execute scripts
+      scriptsToExecute.forEach(({ url, data }) => {
+        this.executeScript(data);
+        this.delayedScripts.delete(url);
+      });
+    }
+
+    executeScript(data) {
+      const element = data.element;
+      const originalSrc = data.originalSrc;
+      
+      if (data.method === 'appendChild') {
+        // Set src and append
+        element.src = originalSrc;
+        data.parent.appendChild(element);
+      } else if (data.method === 'insertBefore') {
+        // Set src and insert
+        element.src = originalSrc;
+        data.parent.insertBefore(element, data.referenceNode);
+      } else {
+        // Just set src (for createElement case)
+        element.src = originalSrc;
+      }
+    }
+
+    scheduleTimeBasedDelays() {
+      this.delayedScripts.forEach((data, url) => {
+        if (data.config.type === 'time') {
+          const seconds = data.config.seconds || 5;
+          setTimeout(() => {
+            if (this.delayedScripts.has(url)) {
+              this.executeScript(data);
+              this.delayedScripts.delete(url);
+            }
+          }, seconds * 1000);
+        }
+      });
+    }
+  }
+
+  // ============================================================================
   // MAIN ORCHESTRATOR
   // ============================================================================
 
   const behaviorMonitor = new BehaviorMonitor();
   const dependencyTracker = new DependencyTracker();
   const scriptClassifier = new ScriptClassifier();
-
-  let delayedScriptsConfig = {};
-  let userInteracted = false;
-  let userScrolled = false;
+  const timingController = new ExecutionTimingController();
 
   behaviorMonitor.start();
   dependencyTracker.start();
-
-  // Track user interactions for delayed execution
-  document.addEventListener('click', () => { userInteracted = true; }, { once: true, capture: true });
-  document.addEventListener('scroll', () => { userScrolled = true; }, { once: true, capture: true });
+  timingController.start();
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'scanScripts') {
@@ -695,7 +914,8 @@
       behaviorMonitor.setPermissionPromptEnabled(request.enabled);
       sendResponse({ success: true });
     } else if (request.action === 'updateDelayedScripts') {
-      delayedScriptsConfig = request.delayedScripts;
+      timingController.setDelayConfig(request.delayedScripts);
+      timingController.scheduleTimeBasedDelays();
       sendResponse({ success: true });
     }
     return true;
@@ -704,7 +924,8 @@
   // Load delayed scripts config from storage
   chrome.storage.sync.get(['delayedScripts'], function(data) {
     if (data.delayedScripts) {
-      delayedScriptsConfig = data.delayedScripts;
+      timingController.setDelayConfig(data.delayedScripts);
+      timingController.scheduleTimeBasedDelays();
     }
   });
 
