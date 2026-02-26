@@ -157,6 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="script-name" title="${script.url}">${getScriptName(script.url)}</td>
         <td class="script-source">${script.source}</td>
         <td><span class="script-type type-${script.type}">${script.type}</span></td>
+        <td><span class="category-badge category-${script.category.toLowerCase()}">${script.category}</span></td>
         <td>${script.timing}</td>
         <td>${script.size}</td>
         <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : 'Active'}</span></td>

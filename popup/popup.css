@@ -390,3 +390,43 @@ body {
   .type-module {
     background-color: #3a7b5a;
   }
+
+  /* Category Badge Styles */
+  .category-badge {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+
+  .category-functional {
+    background-color: #2a5d2a;
+    color: #7fff7f;
+  }
+
+  .category-ux {
+    background-color: #2a4a7b;
+    color: #7fb3ff;
+  }
+
+  .category-tracking {
+    background-color: #7b5a2a;
+    color: #ffcc7f;
+  }
+
+  .category-ads {
+    background-color: #7b2a2a;
+    color: #ff7f7f;
+  }
+
+  .category-suspicious {
+    background-color: #5d2a5d;
+    color: #ff7fff;
+  }
+
+  .category-unknown {
+    background-color: #3a3a3a;
+    color: #aaaaaa;
+  }
