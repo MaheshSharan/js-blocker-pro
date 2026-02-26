@@ -430,3 +430,20 @@ body {
     background-color: #3a3a3a;
     color: #aaaaaa;
   }
+
+  /* Behavior Flag Styles */
+  .behavior-cell {
+    text-align: center;
+    font-size: 14px;
+  }
+
+  .behavior-flag {
+    display: inline-block;
+    margin: 0 2px;
+    cursor: help;
+  }
+
+  .no-behavior {
+    color: #666;
+    font-size: 12px;
+  }

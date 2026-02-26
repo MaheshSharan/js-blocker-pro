@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
     scripts.forEach(script => {
       const row = document.createElement('tr');
       const isDisabled = disabledScriptIds.has(script.id);
+      const behaviorBadges = getBehaviorBadges(script.behaviors || []);
       
       row.innerHTML = `
         <td><input type="checkbox" data-script-id="${script.id}"></td>
@@ -158,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="script-source">${script.source}</td>
         <td><span class="script-type type-${script.type}">${script.type}</span></td>
         <td><span class="category-badge category-${script.category.toLowerCase()}">${script.category}</span></td>
+        <td class="behavior-cell">${behaviorBadges}</td>
         <td>${script.timing}</td>
         <td>${script.size}</td>
         <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : 'Active'}</span></td>
@@ -170,6 +172,47 @@ document.addEventListener('DOMContentLoaded', function() {
       
       scriptTableBody.appendChild(row);
     });
+  }
+
+  function getBehaviorBadges(behaviors) {
+    if (!behaviors || behaviors.length === 0) {
+      return '<span class="no-behavior">—</span>';
+    }
+
+    const flagMap = {
+      'fingerprint-canvas': '🟣',
+      'fingerprint-webgl': '🟣',
+      'fingerprint-audio': '🟣',
+      'storage-access': '🟢',
+      'storage-abuse': '🟠',
+      'beacon': '🟠',
+      'hidden-iframe': '🔴',
+      'webrtc-probe': '🔴',
+      'excessive-timers': '🔴',
+      'wasm-usage': '🔵'
+    };
+
+    const titleMap = {
+      'fingerprint-canvas': 'Canvas Fingerprinting',
+      'fingerprint-webgl': 'WebGL Fingerprinting',
+      'fingerprint-audio': 'Audio Fingerprinting',
+      'storage-access': 'Storage Access',
+      'storage-abuse': 'Storage Abuse',
+      'beacon': 'Beaconing',
+      'hidden-iframe': 'Hidden Iframe',
+      'webrtc-probe': 'WebRTC Probing',
+      'excessive-timers': 'Excessive Timers',
+      'wasm-usage': 'WASM Usage'
+    };
+
+    const uniqueBehaviors = [...new Set(behaviors)];
+    const badges = uniqueBehaviors.map(behavior => {
+      const flag = flagMap[behavior] || '⚠️';
+      const title = titleMap[behavior] || behavior;
+      return `<span class="behavior-flag" title="${title}">${flag}</span>`;
+    });
+
+    return badges.join(' ');
   }
 
   function updateRowSelection(checkbox) {

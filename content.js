@@ -1,21 +1,246 @@
-// content.js - Script Discovery Engine
+// content.js - Script Discovery Engine + Behavior Monitoring
 
 (function() {
   'use strict';
+
+  // Behavior monitoring state
+  const behaviorFlags = new Map(); // scriptId -> Set of flags
+  const monitoringActive = false;
 
   // Listen for scan requests from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'scanScripts') {
       const scripts = discoverAllScripts();
       sendResponse({ scripts });
+    } else if (request.action === 'startMonitoring') {
+      startBehaviorMonitoring();
+      sendResponse({ success: true });
+    } else if (request.action === 'getBehaviorFlags') {
+      const flags = {};
+      behaviorFlags.forEach((value, key) => {
+        flags[key] = Array.from(value);
+      });
+      sendResponse({ flags });
     }
     return true;
   });
+
+  // PHASE 3: Behavior Monitoring Layer
+  function startBehaviorMonitoring() {
+    if (window.behaviorMonitoringActive) return;
+    window.behaviorMonitoringActive = true;
+
+    // Monitor localStorage abuse
+    monitorLocalStorage();
+    
+    // Monitor hidden iframe creation
+    monitorIframes();
+    
+    // Monitor WebRTC probing
+    monitorWebRTC();
+    
+    // Monitor background fetch beacons
+    monitorBeacons();
+    
+    // Monitor excessive timers
+    monitorTimers();
+    
+    // Monitor WASM instantiation
+    monitorWASM();
+    
+    // Monitor canvas fingerprinting
+    monitorCanvas();
+    
+    // Monitor WebGL fingerprinting
+    monitorWebGL();
+    
+    // Monitor AudioContext fingerprinting
+    monitorAudioContext();
+  }
+
+  function addBehaviorFlag(scriptIdentifier, flag) {
+    if (!behaviorFlags.has(scriptIdentifier)) {
+      behaviorFlags.set(scriptIdentifier, new Set());
+    }
+    behaviorFlags.get(scriptIdentifier).add(flag);
+  }
+
+  function getScriptIdentifier() {
+    // Try to identify which script is calling
+    const stack = new Error().stack;
+    if (stack) {
+      const match = stack.match(/https?:\/\/[^\s)]+/);
+      if (match) return match[0];
+    }
+    return 'unknown';
+  }
+
+  function monitorLocalStorage() {
+    const originalSetItem = Storage.prototype.setItem;
+    const originalGetItem = Storage.prototype.getItem;
+    const accessCount = new Map();
+
+    Storage.prototype.setItem = function(key, value) {
+      const scriptId = getScriptIdentifier();
+      const count = accessCount.get(scriptId) || 0;
+      accessCount.set(scriptId, count + 1);
+      
+      if (count > 10) {
+        addBehaviorFlag(scriptId, 'storage-abuse');
+      } else {
+        addBehaviorFlag(scriptId, 'storage-access');
+      }
+      
+      return originalSetItem.apply(this, arguments);
+    };
+
+    Storage.prototype.getItem = function(key) {
+      const scriptId = getScriptIdentifier();
+      addBehaviorFlag(scriptId, 'storage-access');
+      return originalGetItem.apply(this, arguments);
+    };
+  }
+
+  function monitorIframes() {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.tagName === 'IFRAME') {
+            const scriptId = getScriptIdentifier();
+            
+            // Check if hidden
+            const style = window.getComputedStyle(node);
+            if (style.display === 'none' || 
+                style.visibility === 'hidden' || 
+                node.style.width === '0px' || 
+                node.style.height === '0px') {
+              addBehaviorFlag(scriptId, 'hidden-iframe');
+            }
+          }
+        });
+      });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function monitorWebRTC() {
+    if (window.RTCPeerConnection) {
+      const OriginalRTC = window.RTCPeerConnection;
+      window.RTCPeerConnection = function(...args) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'webrtc-probe');
+        return new OriginalRTC(...args);
+      };
+    }
+  }
+
+  function monitorBeacons() {
+    if (navigator.sendBeacon) {
+      const originalBeacon = navigator.sendBeacon;
+      navigator.sendBeacon = function(...args) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'beacon');
+        return originalBeacon.apply(this, arguments);
+      };
+    }
+
+    // Monitor fetch with keepalive
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+      if (options && options.keepalive) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'beacon');
+      }
+      return originalFetch.apply(this, arguments);
+    };
+  }
+
+  function monitorTimers() {
+    const timerCounts = new Map();
+    
+    const originalSetInterval = window.setInterval;
+    window.setInterval = function(...args) {
+      const scriptId = getScriptIdentifier();
+      const count = timerCounts.get(scriptId) || 0;
+      timerCounts.set(scriptId, count + 1);
+      
+      if (count > 5) {
+        addBehaviorFlag(scriptId, 'excessive-timers');
+      }
+      
+      return originalSetInterval.apply(this, arguments);
+    };
+  }
+
+  function monitorWASM() {
+    if (window.WebAssembly) {
+      const originalInstantiate = WebAssembly.instantiate;
+      WebAssembly.instantiate = function(...args) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'wasm-usage');
+        return originalInstantiate.apply(this, arguments);
+      };
+    }
+  }
+
+  function monitorCanvas() {
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+
+    HTMLCanvasElement.prototype.toDataURL = function(...args) {
+      const scriptId = getScriptIdentifier();
+      addBehaviorFlag(scriptId, 'fingerprint-canvas');
+      return originalToDataURL.apply(this, arguments);
+    };
+
+    CanvasRenderingContext2D.prototype.getImageData = function(...args) {
+      const scriptId = getScriptIdentifier();
+      addBehaviorFlag(scriptId, 'fingerprint-canvas');
+      return originalGetImageData.apply(this, arguments);
+    };
+  }
+
+  function monitorWebGL() {
+    const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
+    
+    WebGLRenderingContext.prototype.getParameter = function(param) {
+      // Check if requesting renderer or vendor info
+      if (param === 37445 || param === 37446) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'fingerprint-webgl');
+      }
+      return originalGetParameter.apply(this, arguments);
+    };
+  }
+
+  function monitorAudioContext() {
+    if (window.AudioContext || window.webkitAudioContext) {
+      const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+      window.AudioContext = function(...args) {
+        const scriptId = getScriptIdentifier();
+        addBehaviorFlag(scriptId, 'fingerprint-audio');
+        return new OriginalAudioContext(...args);
+      };
+      if (window.webkitAudioContext) {
+        window.webkitAudioContext = window.AudioContext;
+      }
+    }
+  }
+
+  // Start monitoring immediately
+  startBehaviorMonitoring();
 
   function discoverAllScripts() {
     const scripts = [];
     const pageOrigin = window.location.origin;
     const performanceEntries = performance.getEntriesByType('resource');
+
+    // Get current behavior flags
+    const currentFlags = {};
+    behaviorFlags.forEach((value, key) => {
+      currentFlags[key] = Array.from(value);
+    });
 
     // 1. Detect External Scripts
     const scriptElements = document.querySelectorAll('script[src]');
@@ -29,7 +254,7 @@
       const loadTime = perfEntry ? Math.round(perfEntry.duration) : 0;
       const size = perfEntry ? Math.round(perfEntry.transferSize || 0) : 0;
 
-      scripts.push({
+      const scriptData = {
         id: generateScriptId(src, 'external', index),
         url: src,
         source: isFirstParty ? 'First Party' : 'Third Party',
@@ -40,8 +265,11 @@
         async: script.async,
         defer: script.defer,
         integrity: script.integrity || null,
-        category: classifyScript(src, scriptOrigin, pageOrigin, null)
-      });
+        category: classifyScript(src, scriptOrigin, pageOrigin, null),
+        behaviors: currentFlags[src] || []
+      };
+
+      scripts.push(scriptData);
     });
 
     // 2. Detect Inline Scripts
@@ -51,17 +279,19 @@
         const content = script.textContent;
         const hash = simpleHash(content);
         const size = new Blob([content]).size;
+        const inlineId = `inline-${hash}`;
 
         scripts.push({
           id: generateScriptId(hash, 'inline', index),
-          url: `inline-${hash}`,
+          url: inlineId,
           source: 'First Party',
           type: 'inline',
           timing: 'N/A',
           size: formatBytes(size),
           state: 'active',
           contentPreview: content.substring(0, 100),
-          category: classifyScript(`inline-${hash}`, pageOrigin, pageOrigin, content)
+          category: classifyScript(inlineId, pageOrigin, pageOrigin, content),
+          behaviors: currentFlags[inlineId] || []
         });
       }
     });
@@ -86,7 +316,8 @@
         timing: `${Math.round(entry.duration)}ms`,
         size: formatBytes(Math.round(entry.transferSize || 0)),
         state: 'active',
-        category: classifyScript(url, scriptOrigin, pageOrigin, null)
+        category: classifyScript(url, scriptOrigin, pageOrigin, null),
+        behaviors: currentFlags[url] || []
       });
     });
 
@@ -105,7 +336,8 @@
         timing: `${Math.round(entry.duration)}ms`,
         size: formatBytes(Math.round(entry.transferSize || 0)),
         state: 'active',
-        category: 'Suspicious' // WASM is often suspicious
+        category: 'Suspicious', // WASM is often suspicious
+        behaviors: currentFlags[entry.name] || []
       });
     });
 
