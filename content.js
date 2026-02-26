@@ -1,4 +1,4 @@
-// content.js - Script Discovery Engine + Behavior Monitoring
+// content.js - Script Discovery Engine + Behavior Monitoring + Dependency Mapping
 
 (function() {
   'use strict';
@@ -6,6 +6,10 @@
   // Behavior monitoring state
   const behaviorFlags = new Map(); // scriptId -> Set of flags
   const monitoringActive = false;
+  
+  // Dependency tracking
+  const scriptDependencies = new Map(); // scriptUrl -> { parent, children[] }
+  const scriptLoadStack = []; // Track current execution stack
 
   // Listen for scan requests from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -21,9 +25,194 @@
         flags[key] = Array.from(value);
       });
       sendResponse({ flags });
+    } else if (request.action === 'getDependencies') {
+      const deps = {};
+      scriptDependencies.forEach((value, key) => {
+        deps[key] = value;
+      });
+      sendResponse({ dependencies: deps });
     }
     return true;
   });
+
+  // PHASE 4: Dependency Mapping
+  function trackDependencies() {
+    // Intercept script creation
+    const originalCreateElement = document.createElement;
+    document.createElement = function(tagName) {
+      const element = originalCreateElement.call(document, tagName);
+      
+      if (tagName.toLowerCase() === 'script') {
+        const currentScript = getCurrentExecutingScript();
+        
+        // Override src setter to track when script URL is set
+        const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+        Object.defineProperty(element, 'src', {
+          set: function(value) {
+            if (currentScript) {
+              // Record dependency: currentScript loads this new script
+              recordDependency(value, currentScript);
+            }
+            originalSrcDescriptor.set.call(this, value);
+          },
+          get: function() {
+            return originalSrcDescriptor.get.call(this);
+          }
+        });
+      }
+      
+      return element;
+    };
+
+    // Track appendChild to catch dynamic script injection
+    const originalAppendChild = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(child) {
+      if (child.tagName === 'SCRIPT' && child.src) {
+        const currentScript = getCurrentExecutingScript();
+        if (currentScript) {
+          recordDependency(child.src, currentScript);
+        }
+      }
+      return originalAppendChild.call(this, child);
+    };
+
+    // Track insertBefore
+    const originalInsertBefore = Node.prototype.insertBefore;
+    Node.prototype.insertBefore = function(newNode, referenceNode) {
+      if (newNode.tagName === 'SCRIPT' && newNode.src) {
+        const currentScript = getCurrentExecutingScript();
+        if (currentScript) {
+          recordDependency(newNode.src, currentScript);
+        }
+      }
+      return originalInsertBefore.call(this, newNode, referenceNode);
+    };
+
+    // Monitor script execution via Performance Observer
+    if (window.PerformanceObserver) {
+      try {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.initiatorType === 'script') {
+              // Find the initiator from the stack
+              const initiator = findScriptInitiator(entry.name);
+              if (initiator) {
+                recordDependency(entry.name, initiator);
+              }
+            }
+          }
+        });
+        observer.observe({ entryTypes: ['resource'] });
+      } catch (e) {
+        console.warn('PerformanceObserver not available');
+      }
+    }
+  }
+
+  function getCurrentExecutingScript() {
+    // Try to get current script from document.currentScript
+    if (document.currentScript && document.currentScript.src) {
+      return document.currentScript.src;
+    }
+
+    // Try to parse from error stack
+    try {
+      const stack = new Error().stack;
+      if (stack) {
+        const matches = stack.match(/https?:\/\/[^\s)]+\.js[^\s)]*/g);
+        if (matches && matches.length > 0) {
+          // Return the most recent script (not this content script)
+          for (const match of matches) {
+            if (!match.includes('chrome-extension://')) {
+              return match.split(':')[0]; // Remove line numbers
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Stack trace not available
+    }
+
+    return null;
+  }
+
+  function findScriptInitiator(scriptUrl) {
+    // Check performance entries for initiator
+    const entries = performance.getEntriesByName(scriptUrl);
+    if (entries.length > 0) {
+      const entry = entries[0];
+      // The initiator is typically the previous script in the waterfall
+      const allScripts = performance.getEntriesByType('resource')
+        .filter(e => e.initiatorType === 'script' || e.name.match(/\.js/));
+      
+      const currentIndex = allScripts.findIndex(e => e.name === scriptUrl);
+      if (currentIndex > 0) {
+        return allScripts[currentIndex - 1].name;
+      }
+    }
+    return null;
+  }
+
+  function recordDependency(childUrl, parentUrl) {
+    if (!childUrl || !parentUrl || childUrl === parentUrl) return;
+
+    // Initialize parent entry
+    if (!scriptDependencies.has(parentUrl)) {
+      scriptDependencies.set(parentUrl, { parent: null, children: [] });
+    }
+
+    // Initialize child entry
+    if (!scriptDependencies.has(childUrl)) {
+      scriptDependencies.set(childUrl, { parent: null, children: [] });
+    }
+
+    // Record relationship
+    const parentData = scriptDependencies.get(parentUrl);
+    const childData = scriptDependencies.get(childUrl);
+
+    if (!parentData.children.includes(childUrl)) {
+      parentData.children.push(childUrl);
+    }
+
+    if (!childData.parent) {
+      childData.parent = parentUrl;
+    }
+  }
+
+  function buildDependencyTree() {
+    // Build a tree structure from the dependency map
+    const tree = [];
+    const processed = new Set();
+
+    scriptDependencies.forEach((data, url) => {
+      if (!data.parent && !processed.has(url)) {
+        // This is a root node
+        tree.push(buildNode(url, processed));
+      }
+    });
+
+    return tree;
+  }
+
+  function buildNode(url, processed) {
+    if (processed.has(url)) {
+      return { url, children: [], circular: true };
+    }
+
+    processed.add(url);
+    const data = scriptDependencies.get(url);
+    
+    if (!data) {
+      return { url, children: [] };
+    }
+
+    const node = {
+      url,
+      children: data.children.map(childUrl => buildNode(childUrl, processed))
+    };
+
+    return node;
+  }
 
   // PHASE 3: Behavior Monitoring Layer
   function startBehaviorMonitoring() {
@@ -230,6 +419,7 @@
 
   // Start monitoring immediately
   startBehaviorMonitoring();
+  trackDependencies();
 
   function discoverAllScripts() {
     const scripts = [];
@@ -240,6 +430,16 @@
     const currentFlags = {};
     behaviorFlags.forEach((value, key) => {
       currentFlags[key] = Array.from(value);
+    });
+
+    // Get dependency information
+    const depInfo = {};
+    scriptDependencies.forEach((value, key) => {
+      depInfo[key] = {
+        parent: value.parent,
+        childCount: value.children.length,
+        children: value.children
+      };
     });
 
     // 1. Detect External Scripts
@@ -266,7 +466,8 @@
         defer: script.defer,
         integrity: script.integrity || null,
         category: classifyScript(src, scriptOrigin, pageOrigin, null),
-        behaviors: currentFlags[src] || []
+        behaviors: currentFlags[src] || [],
+        dependency: depInfo[src] || { parent: null, childCount: 0, children: [] }
       };
 
       scripts.push(scriptData);
@@ -291,7 +492,8 @@
           state: 'active',
           contentPreview: content.substring(0, 100),
           category: classifyScript(inlineId, pageOrigin, pageOrigin, content),
-          behaviors: currentFlags[inlineId] || []
+          behaviors: currentFlags[inlineId] || [],
+          dependency: depInfo[inlineId] || { parent: null, childCount: 0, children: [] }
         });
       }
     });
@@ -317,7 +519,8 @@
         size: formatBytes(Math.round(entry.transferSize || 0)),
         state: 'active',
         category: classifyScript(url, scriptOrigin, pageOrigin, null),
-        behaviors: currentFlags[url] || []
+        behaviors: currentFlags[url] || [],
+        dependency: depInfo[url] || { parent: null, childCount: 0, children: [] }
       });
     });
 
@@ -337,7 +540,8 @@
         size: formatBytes(Math.round(entry.transferSize || 0)),
         state: 'active',
         category: 'Suspicious', // WASM is often suspicious
-        behaviors: currentFlags[entry.name] || []
+        behaviors: currentFlags[entry.name] || [],
+        dependency: depInfo[entry.name] || { parent: null, childCount: 0, children: [] }
       });
     });
 

@@ -447,3 +447,81 @@ body {
     color: #666;
     font-size: 12px;
   }
+
+  /* Dependency Styles */
+  .dependency-cell {
+    text-align: center;
+    font-size: 14px;
+  }
+
+  .dep-parent, .dep-children {
+    display: inline-block;
+    margin: 0 2px;
+    cursor: help;
+  }
+
+  .dep-children {
+    font-weight: bold;
+    color: #7fb3ff;
+  }
+
+  .no-deps {
+    color: #666;
+    font-size: 12px;
+  }
+
+  /* Dependency Tree Expansion */
+  .dependency-tree-row {
+    background-color: #252525 !important;
+  }
+
+  .dependency-tree {
+    padding: 15px;
+    margin: 5px 0;
+    background-color: #1a1a1a;
+    border-left: 3px solid #3a7bd5;
+    border-radius: 4px;
+  }
+
+  .tree-header {
+    font-weight: bold;
+    color: #3a7bd5;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
+  .tree-parent {
+    margin: 8px 0;
+    padding: 5px 10px;
+    background-color: #2a2a2a;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .tree-children {
+    margin: 8px 0 5px 0;
+    font-weight: bold;
+    font-size: 12px;
+    color: #7fb3ff;
+  }
+
+  .tree-list {
+    list-style: none;
+    padding: 0;
+    margin: 5px 0 0 15px;
+  }
+
+  .tree-item {
+    padding: 5px 10px;
+    margin: 3px 0;
+    background-color: #2a2a2a;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #e0e0e0;
+    border-left: 2px solid #7fb3ff;
+  }
+
+  .tree-script {
+    color: #7fff7f;
+    font-family: monospace;
+  }

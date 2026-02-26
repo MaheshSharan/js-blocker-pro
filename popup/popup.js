@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const row = document.createElement('tr');
       const isDisabled = disabledScriptIds.has(script.id);
       const behaviorBadges = getBehaviorBadges(script.behaviors || []);
+      const dependencyInfo = getDependencyInfo(script);
       
       row.innerHTML = `
         <td><input type="checkbox" data-script-id="${script.id}"></td>
@@ -160,6 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <td><span class="script-type type-${script.type}">${script.type}</span></td>
         <td><span class="category-badge category-${script.category.toLowerCase()}">${script.category}</span></td>
         <td class="behavior-cell">${behaviorBadges}</td>
+        <td class="dependency-cell">${dependencyInfo}</td>
         <td>${script.timing}</td>
         <td>${script.size}</td>
         <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : 'Active'}</span></td>
@@ -169,9 +171,85 @@ document.addEventListener('DOMContentLoaded', function() {
       checkbox.addEventListener('change', function() {
         updateRowSelection(checkbox);
       });
+
+      // Add click handler for dependency expansion
+      const depCell = row.querySelector('.dependency-cell');
+      if (script.dependency && script.dependency.childCount > 0) {
+        depCell.style.cursor = 'pointer';
+        depCell.addEventListener('click', function(e) {
+          e.stopPropagation();
+          toggleDependencyTree(row, script);
+        });
+      }
       
       scriptTableBody.appendChild(row);
     });
+  }
+
+  function getDependencyInfo(script) {
+    const dep = script.dependency;
+    if (!dep) {
+      return '<span class="no-deps">—</span>';
+    }
+
+    let html = '';
+    
+    // Show parent indicator
+    if (dep.parent) {
+      const parentName = getScriptName(dep.parent);
+      html += `<span class="dep-parent" title="Loaded by: ${dep.parent}">⬆️</span>`;
+    }
+
+    // Show children count
+    if (dep.childCount > 0) {
+      html += `<span class="dep-children" title="Loads ${dep.childCount} script(s)">⬇️${dep.childCount}</span>`;
+    }
+
+    return html || '<span class="no-deps">—</span>';
+  }
+
+  function toggleDependencyTree(row, script) {
+    const existingTree = row.nextElementSibling;
+    
+    // If tree is already shown, hide it
+    if (existingTree && existingTree.classList.contains('dependency-tree-row')) {
+      existingTree.remove();
+      return;
+    }
+
+    // Create tree row
+    const treeRow = document.createElement('tr');
+    treeRow.classList.add('dependency-tree-row');
+    
+    const treeCell = document.createElement('td');
+    treeCell.colSpan = 10;
+    
+    const treeContent = document.createElement('div');
+    treeContent.classList.add('dependency-tree');
+    
+    // Build tree HTML
+    const dep = script.dependency;
+    let treeHTML = '<div class="tree-header">📊 Dependency Chain:</div>';
+    
+    if (dep.parent) {
+      treeHTML += `<div class="tree-parent">⬆️ Parent: <span class="tree-script">${getScriptName(dep.parent)}</span></div>`;
+    }
+    
+    if (dep.children && dep.children.length > 0) {
+      treeHTML += '<div class="tree-children">⬇️ Children:</div>';
+      treeHTML += '<ul class="tree-list">';
+      dep.children.forEach(child => {
+        treeHTML += `<li class="tree-item">${getScriptName(child)}</li>`;
+      });
+      treeHTML += '</ul>';
+    }
+    
+    treeContent.innerHTML = treeHTML;
+    treeCell.appendChild(treeContent);
+    treeRow.appendChild(treeCell);
+    
+    // Insert after current row
+    row.parentNode.insertBefore(treeRow, row.nextSibling);
   }
 
   function getBehaviorBadges(behaviors) {
