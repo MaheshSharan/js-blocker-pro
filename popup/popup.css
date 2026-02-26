@@ -368,12 +368,14 @@ body {
   .script-table {
     max-height: 400px;
     overflow-y: auto;
+    overflow-x: auto;
     border: 1px solid #484848;
     border-radius: 4px;
   }
 
   .script-table table {
     width: 100%;
+    min-width: 1000px;
     border-collapse: collapse;
   }
 
@@ -845,4 +847,33 @@ body {
 
   .policy-condition input[type="checkbox"] {
     cursor: pointer;
+  }
+
+  /* Download Button */
+  .download-btn {
+    background: none;
+    border: 1px solid #3a7bd5;
+    color: #3a7bd5;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.3s;
+  }
+
+  .download-btn:hover {
+    background-color: #3a7bd5;
+    color: white;
+  }
+
+  .download-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: #666;
+    color: #666;
+  }
+
+  .download-btn:disabled:hover {
+    background: none;
+    color: #666;
   }

@@ -411,6 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const dependencyInfo = getDependencyInfo(script);
       const execInfo = getExecInfo(script.id, script.type);
       const trustBadge = getTrustBadge(script.trustScore);
+      const canDownload = !script.url.startsWith('inline-') && script.type !== 'wasm';
       
       row.innerHTML = `
         <td><input type="checkbox" data-script-id="${script.id}"></td>
@@ -423,12 +424,22 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="dependency-cell">${dependencyInfo}</td>
         <td>${execInfo}</td>
         <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : isDelayed ? 'Delayed' : 'Active'}</span></td>
+        <td><button class="download-btn" data-script-url="${script.url}" ${!canDownload ? 'disabled' : ''}>Download</button></td>
       `;
       
       const checkbox = row.querySelector('input[type="checkbox"]');
       checkbox.addEventListener('change', function() {
         updateRowSelection(checkbox);
       });
+
+      // Add download button handler
+      const downloadBtn = row.querySelector('.download-btn');
+      if (canDownload) {
+        downloadBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          downloadScript(script.url);
+        });
+      }
 
       // Add click handler for dependency expansion
       const depCell = row.querySelector('.dependency-cell');
@@ -442,6 +453,33 @@ document.addEventListener('DOMContentLoaded', function() {
       
       scriptTableBody.appendChild(row);
     });
+  }
+
+  function downloadScript(url) {
+    // Fetch the script content and trigger download
+    fetch(url)
+      .then(response => response.text())
+      .then(content => {
+        const blob = new Blob([content], { type: 'application/javascript' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const filename = url.split('/').pop().split('?')[0] || 'script.js';
+        
+        chrome.downloads.download({
+          url: downloadUrl,
+          filename: filename,
+          saveAs: true
+        }, function(downloadId) {
+          if (chrome.runtime.lastError) {
+            showScanMessage('Download failed: ' + chrome.runtime.lastError.message, 'error');
+          } else {
+            showScanMessage('Download started', 'success');
+          }
+          URL.revokeObjectURL(downloadUrl);
+        });
+      })
+      .catch(error => {
+        showScanMessage('Failed to fetch script: ' + error.message, 'error');
+      });
   }
 
   function getTrustBadge(trustScore) {
