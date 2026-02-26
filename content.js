@@ -557,6 +557,104 @@
       
       return entropy;
     }
+
+    // PHASE 9: Local AI Suggestion Layer
+    calculateTrustScore(scriptData) {
+      let score = 50; // Start neutral
+      const factors = [];
+
+      // Category scoring
+      if (scriptData.category === 'Functional') {
+        score += 20;
+        factors.push('Functional script (+20)');
+      } else if (scriptData.category === 'UX') {
+        score += 10;
+        factors.push('UX enhancement (+10)');
+      } else if (scriptData.category === 'Tracking') {
+        score -= 30;
+        factors.push('Tracking script (-30)');
+      } else if (scriptData.category === 'Ads') {
+        score -= 35;
+        factors.push('Advertisement (-35)');
+      } else if (scriptData.category === 'Suspicious') {
+        score -= 40;
+        factors.push('Suspicious behavior (-40)');
+      }
+
+      // Source scoring
+      if (scriptData.source === 'First Party') {
+        score += 15;
+        factors.push('First-party (+15)');
+      } else if (scriptData.source === 'Third Party') {
+        score -= 10;
+        factors.push('Third-party (-10)');
+      }
+
+      // Behavior flags scoring
+      const behaviors = scriptData.behaviors || [];
+      if (behaviors.includes('fingerprint-canvas') || behaviors.includes('fingerprint-webgl') || behaviors.includes('fingerprint-audio')) {
+        score -= 25;
+        factors.push('Fingerprinting detected (-25)');
+      }
+      if (behaviors.includes('storage-abuse')) {
+        score -= 15;
+        factors.push('Storage abuse (-15)');
+      }
+      if (behaviors.includes('hidden-iframe')) {
+        score -= 20;
+        factors.push('Hidden iframe (-20)');
+      }
+      if (behaviors.includes('webrtc-probe')) {
+        score -= 20;
+        factors.push('WebRTC probing (-20)');
+      }
+      if (behaviors.includes('beacon')) {
+        score -= 10;
+        factors.push('Background beaconing (-10)');
+      }
+      if (behaviors.includes('wasm-usage')) {
+        score -= 15;
+        factors.push('WASM usage (-15)');
+      }
+
+      // Dependency scoring
+      if (scriptData.dependency && scriptData.dependency.parent) {
+        score -= 5;
+        factors.push('Loaded by another script (-5)');
+      }
+      if (scriptData.dependency && scriptData.dependency.childCount > 3) {
+        score -= 10;
+        factors.push('Loads many scripts (-10)');
+      }
+
+      // Type scoring
+      if (scriptData.type === 'inline') {
+        score += 5;
+        factors.push('Inline script (+5)');
+      } else if (scriptData.type === 'dynamic') {
+        score -= 5;
+        factors.push('Dynamically loaded (-5)');
+      } else if (scriptData.type === 'wasm') {
+        score -= 20;
+        factors.push('WebAssembly (-20)');
+      }
+
+      // Clamp score between 0-100
+      score = Math.max(0, Math.min(100, score));
+
+      return {
+        score: score,
+        recommendation: this.getRecommendation(score),
+        factors: factors
+      };
+    }
+
+    getRecommendation(score) {
+      if (score >= 70) return 'safe';
+      if (score >= 40) return 'neutral';
+      if (score >= 20) return 'caution';
+      return 'block';
+    }
   }
 
   // ============================================================================
@@ -622,7 +720,7 @@
       const scriptOrigin = new URL(src).origin;
       const perfEntry = performanceEntries.find(e => e.name === src);
       
-      scripts.push({
+      const scriptData = {
         id: generateScriptId(src, 'external', index),
         url: src,
         source: scriptOrigin === pageOrigin ? 'First Party' : 'Third Party',
@@ -633,7 +731,11 @@
         category: scriptClassifier.classify(src, scriptOrigin, pageOrigin, null),
         behaviors: currentFlags[src] || [],
         dependency: dependencyTracker.getDependencyInfo(src)
-      });
+      };
+
+      // Calculate trust score
+      scriptData.trustScore = scriptClassifier.calculateTrustScore(scriptData);
+      scripts.push(scriptData);
     });
 
     // Inline Scripts
@@ -643,7 +745,7 @@
         const hash = simpleHash(content);
         const inlineId = `inline-${hash}`;
 
-        scripts.push({
+        const scriptData = {
           id: generateScriptId(hash, 'inline', index),
           url: inlineId,
           source: 'First Party',
@@ -654,7 +756,10 @@
           category: scriptClassifier.classify(inlineId, pageOrigin, pageOrigin, content),
           behaviors: currentFlags[inlineId] || [],
           dependency: dependencyTracker.getDependencyInfo(inlineId)
-        });
+        };
+
+        scriptData.trustScore = scriptClassifier.calculateTrustScore(scriptData);
+        scripts.push(scriptData);
       }
     });
 
@@ -664,7 +769,7 @@
         const url = entry.name;
         const scriptOrigin = new URL(url).origin;
 
-        scripts.push({
+        const scriptData = {
           id: generateScriptId(url, 'dynamic', index),
           url: url,
           source: scriptOrigin === pageOrigin ? 'First Party' : 'Third Party',
@@ -675,13 +780,16 @@
           category: scriptClassifier.classify(url, scriptOrigin, pageOrigin, null),
           behaviors: currentFlags[url] || [],
           dependency: dependencyTracker.getDependencyInfo(url)
-        });
+        };
+
+        scriptData.trustScore = scriptClassifier.calculateTrustScore(scriptData);
+        scripts.push(scriptData);
       });
 
     // WASM
     performanceEntries.filter(e => e.name.match(/\.wasm(\?|$)/))
       .forEach((entry, index) => {
-        scripts.push({
+        const scriptData = {
           id: generateScriptId(entry.name, 'wasm', index),
           url: entry.name,
           source: 'WASM',
@@ -692,7 +800,10 @@
           category: 'Suspicious',
           behaviors: currentFlags[entry.name] || [],
           dependency: dependencyTracker.getDependencyInfo(entry.name)
-        });
+        };
+
+        scriptData.trustScore = scriptClassifier.calculateTrustScore(scriptData);
+        scripts.push(scriptData);
       });
 
     return scripts;

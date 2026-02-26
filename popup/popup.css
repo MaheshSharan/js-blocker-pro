@@ -683,3 +683,133 @@ body {
     font-weight: bold;
     font-size: 11px;
   }
+
+  /* AI Summary Styles */
+  .ai-summary {
+    background-color: #2a2a2a;
+    border: 1px solid #484848;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 15px;
+    font-size: 12px;
+    display: none;
+  }
+
+  .ai-summary.show {
+    display: block;
+  }
+
+  .ai-summary-title {
+    font-weight: bold;
+    color: #7fb3ff;
+    margin-bottom: 8px;
+  }
+
+  .ai-stats {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .ai-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .ai-stat-label {
+    color: #aaa;
+    font-size: 10px;
+  }
+
+  .ai-stat-value {
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  .stat-safe { color: #7fff7f; }
+  .stat-caution { color: #ffcc7f; }
+  .stat-block { color: #ff7f7f; }
+
+  /* Trust Score Badge */
+  .trust-badge {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: help;
+  }
+
+  .trust-safe {
+    background-color: #2a5d2a;
+    color: #7fff7f;
+  }
+
+  .trust-neutral {
+    background-color: #5a5a2a;
+    color: #ffff7f;
+  }
+
+  .trust-caution {
+    background-color: #7b5a2a;
+    color: #ffcc7f;
+  }
+
+  .trust-block {
+    background-color: #7b2a2a;
+    color: #ff7f7f;
+  }
+
+  /* Policy Builder Styles */
+  .policy-builder {
+    background-color: #2a2a2a;
+    border: 1px solid #484848;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+  }
+
+  .policy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #7fb3ff;
+  }
+
+  .policy-form {
+    margin-top: 15px;
+  }
+
+  .policy-row {
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: bold;
+  }
+
+  .policy-conditions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+
+  .policy-condition {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    background-color: #1e1e1e;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .policy-condition:hover {
+    background-color: #252525;
+  }
+
+  .policy-condition input[type="checkbox"] {
+    cursor: pointer;
+  }

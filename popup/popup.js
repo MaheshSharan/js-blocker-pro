@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const closeDelayPanel = document.getElementById('closeDelayPanel');
   const applyDelayBtn = document.getElementById('applyDelayBtn');
   const delaySeconds = document.getElementById('delaySeconds');
+  
+  // AI and Policy elements
+  const aiSummary = document.getElementById('aiSummary');
+  const togglePolicyBuilder = document.getElementById('togglePolicyBuilder');
+  const policyForm = document.getElementById('policyForm');
+  const applyPolicyBtn = document.getElementById('applyPolicyBtn');
 
   let discoveredScripts = [];
   let disabledScriptIds = new Set();
@@ -252,6 +258,47 @@ document.addEventListener('DOMContentLoaded', function() {
     showScanMessage(`Applied delay to ${selected.length} script(s)`, 'success');
   });
 
+  togglePolicyBuilder.addEventListener('click', function() {
+    policyForm.classList.toggle('hidden');
+  });
+
+  applyPolicyBtn.addEventListener('click', function() {
+    const conditions = Array.from(document.querySelectorAll('input[name="condition"]:checked'))
+      .map(cb => cb.value);
+
+    if (conditions.length === 0) {
+      showScanMessage('Select at least one condition', 'error');
+      return;
+    }
+
+    let blockedCount = 0;
+    discoveredScripts.forEach(script => {
+      if (matchesPolicy(script, conditions)) {
+        disabledScriptIds.add(script.id);
+        blockedCount++;
+      }
+    });
+
+    saveDisabledScripts();
+    updateTableDisplay();
+    showScanMessage(`Policy applied: blocked ${blockedCount} script(s)`, 'success');
+  });
+
+  function matchesPolicy(script, conditions) {
+    for (const condition of conditions) {
+      if (condition === 'thirdParty' && script.source === 'Third Party') return true;
+      if (condition === 'tracking' && script.category === 'Tracking') return true;
+      if (condition === 'ads' && script.category === 'Ads') return true;
+      if (condition === 'fingerprinting') {
+        const behaviors = script.behaviors || [];
+        if (behaviors.some(b => b.includes('fingerprint'))) return true;
+      }
+      if (condition === 'lowTrust' && script.trustScore && script.trustScore.score < 30) return true;
+      if (condition === 'beforeInteraction' && script.type !== 'inline') return true;
+    }
+    return false;
+  }
+
   function showMainView() {
     mainView.classList.remove('hidden');
     scanView.classList.add('hidden');
@@ -265,6 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function performScan() {
     scanStatus.textContent = 'Scanning...';
     scriptTableBody.innerHTML = '';
+    aiSummary.classList.remove('show');
     
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       if (!tabs[0]) {
@@ -287,12 +335,51 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           displayScripts(discoveredScripts);
+          displayAISummary(discoveredScripts);
           scanStatus.textContent = `Found ${discoveredScripts.length} script(s) - Mode: ${getModeDisplayName(currentMode)}`;
         } else {
           scanStatus.textContent = 'No scripts found';
         }
       });
     });
+  }
+
+  function displayAISummary(scripts) {
+    const recommendations = {
+      safe: 0,
+      neutral: 0,
+      caution: 0,
+      block: 0
+    };
+
+    scripts.forEach(script => {
+      if (script.trustScore) {
+        recommendations[script.trustScore.recommendation]++;
+      }
+    });
+
+    aiSummary.innerHTML = `
+      <div class="ai-summary-title">🤖 AI Analysis</div>
+      <div class="ai-stats">
+        <div class="ai-stat">
+          <span class="ai-stat-label">Safe</span>
+          <span class="ai-stat-value stat-safe">${recommendations.safe}</span>
+        </div>
+        <div class="ai-stat">
+          <span class="ai-stat-label">Neutral</span>
+          <span class="ai-stat-value">${recommendations.neutral}</span>
+        </div>
+        <div class="ai-stat">
+          <span class="ai-stat-label">Caution</span>
+          <span class="ai-stat-value stat-caution">${recommendations.caution}</span>
+        </div>
+        <div class="ai-stat">
+          <span class="ai-stat-label">Block</span>
+          <span class="ai-stat-value stat-block">${recommendations.block}</span>
+        </div>
+      </div>
+    `;
+    aiSummary.classList.add('show');
   }
 
   function displayScripts(scripts) {
@@ -305,6 +392,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const behaviorBadges = getBehaviorBadges(script.behaviors || []);
       const dependencyInfo = getDependencyInfo(script);
       const execInfo = getExecInfo(script.id, script.type);
+      const trustBadge = getTrustBadge(script.trustScore);
       
       row.innerHTML = `
         <td><input type="checkbox" data-script-id="${script.id}"></td>
@@ -312,10 +400,10 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="script-source">${script.source}</td>
         <td><span class="script-type type-${script.type}">${script.type}</span></td>
         <td><span class="category-badge category-${script.category.toLowerCase()}">${script.category}</span></td>
+        <td>${trustBadge}</td>
         <td class="behavior-cell">${behaviorBadges}</td>
         <td class="dependency-cell">${dependencyInfo}</td>
         <td>${execInfo}</td>
-        <td>${script.size}</td>
         <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : isDelayed ? 'Delayed' : 'Active'}</span></td>
       `;
       
@@ -336,6 +424,21 @@ document.addEventListener('DOMContentLoaded', function() {
       
       scriptTableBody.appendChild(row);
     });
+  }
+
+  function getTrustBadge(trustScore) {
+    if (!trustScore) return '<span class="trust-badge trust-neutral">?</span>';
+    
+    const score = trustScore.score;
+    const rec = trustScore.recommendation;
+    const title = trustScore.factors.join('\n');
+    
+    let className = 'trust-neutral';
+    if (rec === 'safe') className = 'trust-safe';
+    else if (rec === 'caution') className = 'trust-caution';
+    else if (rec === 'block') className = 'trust-block';
+    
+    return `<span class="trust-badge ${className}" title="${title}">${score}</span>`;
   }
 
   function getExecInfo(scriptId, scriptType) {
