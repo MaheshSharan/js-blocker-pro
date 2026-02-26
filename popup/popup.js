@@ -22,15 +22,23 @@ document.addEventListener('DOMContentLoaded', function() {
   const selectAllBtn = document.getElementById('selectAllBtn');
   const disableSelectedBtn = document.getElementById('disableSelectedBtn');
   const allowSelectedBtn = document.getElementById('allowSelectedBtn');
+  const delaySelectedBtn = document.getElementById('delaySelectedBtn');
   const scanStatus = document.getElementById('scanStatus');
   const scriptTableBody = document.getElementById('scriptTableBody');
+  
+  // Delay panel elements
+  const delayPanel = document.getElementById('delayPanel');
+  const closeDelayPanel = document.getElementById('closeDelayPanel');
+  const applyDelayBtn = document.getElementById('applyDelayBtn');
+  const delaySeconds = document.getElementById('delaySeconds');
 
   let discoveredScripts = [];
   let disabledScriptIds = new Set();
+  let delayedScripts = new Map(); // scriptId -> {type, seconds}
   let currentMode = 'normal';
 
   // Load initial state
-  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds', 'controlMode', 'permissionPromptsEnabled'], function(data) {
+  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds', 'controlMode', 'permissionPromptsEnabled', 'delayedScripts'], function(data) {
     jsToggle.checked = data.jsDisabled || false;
     status.textContent = data.jsDisabled ? 'JavaScript Disabled' : 'JavaScript Enabled';
     
@@ -42,6 +50,11 @@ document.addEventListener('DOMContentLoaded', function() {
     disabledScriptIds = new Set(data.disabledScriptIds || []);
     currentMode = data.controlMode || 'normal';
     if (controlMode) controlMode.value = currentMode;
+    
+    // Load delayed scripts
+    if (data.delayedScripts) {
+      delayedScripts = new Map(Object.entries(data.delayedScripts));
+    }
   });
 
   // Main view functionality
@@ -194,11 +207,49 @@ document.addEventListener('DOMContentLoaded', function() {
     
     selected.forEach(script => {
       disabledScriptIds.delete(script.id);
+      delayedScripts.delete(script.id);
     });
     
     saveDisabledScripts();
+    saveDelayedScripts();
     updateTableDisplay();
     showScanMessage(`Allowed ${selected.length} script(s)`, 'success');
+  });
+
+  delaySelectedBtn.addEventListener('click', function() {
+    const selected = getSelectedScripts();
+    if (selected.length === 0) {
+      showScanMessage('No scripts selected', 'error');
+      return;
+    }
+    delayPanel.classList.remove('hidden');
+  });
+
+  closeDelayPanel.addEventListener('click', function() {
+    delayPanel.classList.add('hidden');
+  });
+
+  applyDelayBtn.addEventListener('click', function() {
+    const selected = getSelectedScripts();
+    if (selected.length === 0) {
+      showScanMessage('No scripts selected', 'error');
+      return;
+    }
+
+    const delayType = document.querySelector('input[name="delayType"]:checked').value;
+    const seconds = delayType === 'time' ? parseInt(delaySeconds.value) || 5 : 0;
+
+    selected.forEach(script => {
+      delayedScripts.set(script.id, { type: delayType, seconds: seconds });
+      // Remove from disabled if it was blocked
+      disabledScriptIds.delete(script.id);
+    });
+
+    saveDelayedScripts();
+    saveDisabledScripts();
+    updateTableDisplay();
+    delayPanel.classList.add('hidden');
+    showScanMessage(`Applied delay to ${selected.length} script(s)`, 'success');
   });
 
   function showMainView() {
@@ -250,8 +301,10 @@ document.addEventListener('DOMContentLoaded', function() {
     scripts.forEach(script => {
       const row = document.createElement('tr');
       const isDisabled = disabledScriptIds.has(script.id);
+      const isDelayed = delayedScripts.has(script.id);
       const behaviorBadges = getBehaviorBadges(script.behaviors || []);
       const dependencyInfo = getDependencyInfo(script);
+      const execInfo = getExecInfo(script.id, script.type);
       
       row.innerHTML = `
         <td><input type="checkbox" data-script-id="${script.id}"></td>
@@ -261,9 +314,9 @@ document.addEventListener('DOMContentLoaded', function() {
         <td><span class="category-badge category-${script.category.toLowerCase()}">${script.category}</span></td>
         <td class="behavior-cell">${behaviorBadges}</td>
         <td class="dependency-cell">${dependencyInfo}</td>
-        <td>${script.timing}</td>
+        <td>${execInfo}</td>
         <td>${script.size}</td>
-        <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : 'Active'}</span></td>
+        <td><span class="script-status ${isDisabled ? 'status-blocked' : 'status-active'}">${isDisabled ? 'Blocked' : isDelayed ? 'Delayed' : 'Active'}</span></td>
       `;
       
       const checkbox = row.querySelector('input[type="checkbox"]');
@@ -283,6 +336,28 @@ document.addEventListener('DOMContentLoaded', function() {
       
       scriptTableBody.appendChild(row);
     });
+  }
+
+  function getExecInfo(scriptId, scriptType) {
+    const delay = delayedScripts.get(scriptId);
+    
+    if (scriptType === 'wasm') {
+      return '<span class="wasm-indicator">WASM</span>';
+    }
+    
+    if (!delay) {
+      return '<span class="exec-badge exec-immediate">Now</span>';
+    }
+
+    if (delay.type === 'interaction') {
+      return '<span class="exec-badge exec-interaction">👆 Click</span>';
+    } else if (delay.type === 'scroll') {
+      return '<span class="exec-badge exec-scroll">📜 Scroll</span>';
+    } else if (delay.type === 'time') {
+      return `<span class="exec-badge exec-delayed">⏱️ ${delay.seconds}s</span>`;
+    }
+
+    return '<span class="exec-badge exec-immediate">Now</span>';
   }
 
   function getDependencyInfo(script) {
@@ -445,6 +520,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function saveDelayedScripts() {
+    const delayedObj = {};
+    delayedScripts.forEach((value, key) => {
+      delayedObj[key] = value;
+    });
+    chrome.storage.sync.set({delayedScripts: delayedObj});
+    
+    // Send to content script
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'updateDelayedScripts',
+          delayedScripts: delayedObj
+        }).catch(() => {});
+      }
+    });
+  }
+
   function updateTableDisplay() {
     const rows = scriptTableBody.querySelectorAll('tr');
     rows.forEach(row => {
@@ -452,9 +545,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const scriptId = checkbox.dataset.scriptId;
       const statusSpan = row.querySelector('.script-status');
       const isDisabled = disabledScriptIds.has(scriptId);
+      const isDelayed = delayedScripts.has(scriptId);
       
-      statusSpan.textContent = isDisabled ? 'Blocked' : 'Active';
+      statusSpan.textContent = isDisabled ? 'Blocked' : isDelayed ? 'Delayed' : 'Active';
       statusSpan.className = `script-status ${isDisabled ? 'status-blocked' : 'status-active'}`;
+      
+      // Update exec column
+      const script = discoveredScripts.find(s => s.id === scriptId);
+      if (script) {
+        const execCell = row.cells[7]; // Exec column
+        execCell.innerHTML = getExecInfo(scriptId, script.type);
+      }
     });
   }
 

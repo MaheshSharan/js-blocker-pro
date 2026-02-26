@@ -560,3 +560,126 @@ body {
     color: #7fff7f;
     font-family: monospace;
   }
+
+  /* Delay Panel Styles */
+  .delay-panel {
+    background-color: #2a2a2a;
+    border: 1px solid #484848;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+
+  .delay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-weight: bold;
+    color: #7fb3ff;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .close-btn:hover {
+    color: #ff7f7f;
+    background-color: #3a3a3a;
+    border-radius: 3px;
+  }
+
+  .delay-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+
+  .delay-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background-color: #1e1e1e;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .delay-option:hover {
+    background-color: #252525;
+  }
+
+  .delay-option input[type="radio"] {
+    cursor: pointer;
+  }
+
+  .time-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 28px;
+    margin-top: -5px;
+  }
+
+  .time-input-group input {
+    width: 60px;
+    padding: 5px;
+    background-color: #1e1e1e;
+    border: 1px solid #484848;
+    border-radius: 3px;
+    color: #e0e0e0;
+    font-size: 13px;
+  }
+
+  .time-input-group span {
+    font-size: 12px;
+    color: #aaa;
+  }
+
+  /* Execution Status Badges */
+  .exec-badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  .exec-immediate {
+    background-color: #2a5d2a;
+    color: #7fff7f;
+  }
+
+  .exec-delayed {
+    background-color: #7b5a2a;
+    color: #ffcc7f;
+  }
+
+  .exec-interaction {
+    background-color: #3a4a7b;
+    color: #7fb3ff;
+  }
+
+  .exec-scroll {
+    background-color: #5a3a7b;
+    color: #bf7fff;
+  }
+
+  /* WASM Indicator */
+  .wasm-indicator {
+    color: #ff7fff;
+    font-weight: bold;
+    font-size: 11px;
+  }

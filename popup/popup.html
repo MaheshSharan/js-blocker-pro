@@ -55,6 +55,33 @@
         <button id="selectAllBtn" class="control-btn">Select All</button>
         <button id="disableSelectedBtn" class="control-btn">Disable Selected</button>
         <button id="allowSelectedBtn" class="control-btn">Allow Selected</button>
+        <button id="delaySelectedBtn" class="control-btn">⏱️ Delay</button>
+      </div>
+
+      <div id="delayPanel" class="delay-panel hidden">
+        <div class="delay-header">
+          <span>⏱️ Execution Timing Control</span>
+          <button id="closeDelayPanel" class="close-btn">✕</button>
+        </div>
+        <div class="delay-options">
+          <label class="delay-option">
+            <input type="radio" name="delayType" value="interaction" checked>
+            <span>After User Interaction (click/scroll)</span>
+          </label>
+          <label class="delay-option">
+            <input type="radio" name="delayType" value="scroll">
+            <span>After Scroll</span>
+          </label>
+          <label class="delay-option">
+            <input type="radio" name="delayType" value="time">
+            <span>After Time Delay</span>
+          </label>
+          <div class="time-input-group">
+            <input type="number" id="delaySeconds" min="1" max="60" value="5" placeholder="Seconds">
+            <span>seconds</span>
+          </div>
+        </div>
+        <button id="applyDelayBtn" class="control-btn">Apply Delay</button>
       </div>
 
       <div id="scanStatus" class="scan-status">Scanning...</div>
@@ -70,7 +97,7 @@
               <th>Category</th>
               <th>Behavior</th>
               <th>Deps</th>
-              <th>Timing</th>
+              <th>Exec</th>
               <th>Size</th>
               <th>Status</th>
             </tr>

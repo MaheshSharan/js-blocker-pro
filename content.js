@@ -567,8 +567,16 @@
   const dependencyTracker = new DependencyTracker();
   const scriptClassifier = new ScriptClassifier();
 
+  let delayedScriptsConfig = {};
+  let userInteracted = false;
+  let userScrolled = false;
+
   behaviorMonitor.start();
   dependencyTracker.start();
+
+  // Track user interactions for delayed execution
+  document.addEventListener('click', () => { userInteracted = true; }, { once: true, capture: true });
+  document.addEventListener('scroll', () => { userScrolled = true; }, { once: true, capture: true });
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'scanScripts') {
@@ -588,8 +596,18 @@
     } else if (request.action === 'setPermissionPromptEnabled') {
       behaviorMonitor.setPermissionPromptEnabled(request.enabled);
       sendResponse({ success: true });
+    } else if (request.action === 'updateDelayedScripts') {
+      delayedScriptsConfig = request.delayedScripts;
+      sendResponse({ success: true });
     }
     return true;
+  });
+
+  // Load delayed scripts config from storage
+  chrome.storage.sync.get(['delayedScripts'], function(data) {
+    if (data.delayedScripts) {
+      delayedScriptsConfig = data.delayedScripts;
+    }
   });
 
   function discoverAllScripts() {
