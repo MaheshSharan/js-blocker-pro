@@ -33,6 +33,16 @@
       </div>
       
       <div class="scan-controls">
+        <div class="mode-selector">
+          <label for="controlMode">Mode:</label>
+          <select id="controlMode">
+            <option value="normal">Normal</option>
+            <option value="banking">Banking (Strict)</option>
+            <option value="social">Social (Balanced)</option>
+            <option value="privacy">Privacy (3rd Party Block)</option>
+            <option value="developer">Developer (Relaxed)</option>
+          </select>
+        </div>
         <button id="selectAllBtn" class="control-btn">Select All</button>
         <button id="disableSelectedBtn" class="control-btn">Disable Selected</button>
         <button id="allowSelectedBtn" class="control-btn">Allow Selected</button>

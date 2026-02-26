@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const scanBtn = document.getElementById('scanBtn');
   const backBtn = document.getElementById('backBtn');
   const rescanBtn = document.getElementById('rescanBtn');
+  const controlMode = document.getElementById('controlMode');
   const selectAllCheckbox = document.getElementById('selectAllCheckbox');
   const selectAllBtn = document.getElementById('selectAllBtn');
   const disableSelectedBtn = document.getElementById('disableSelectedBtn');
@@ -24,13 +25,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let discoveredScripts = [];
   let disabledScriptIds = new Set();
+  let currentMode = 'normal';
 
   // Load initial state
-  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds'], function(data) {
+  chrome.storage.sync.get(['jsDisabled', 'blockedScripts', 'disabledScriptIds', 'controlMode'], function(data) {
     jsToggle.checked = data.jsDisabled || false;
     status.textContent = data.jsDisabled ? 'JavaScript Disabled' : 'JavaScript Enabled';
     blockedScripts.value = (data.blockedScripts || []).join('\n');
     disabledScriptIds = new Set(data.disabledScriptIds || []);
+    currentMode = data.controlMode || 'normal';
+    if (controlMode) controlMode.value = currentMode;
   });
 
   // Main view functionality
@@ -62,6 +66,70 @@ document.addEventListener('DOMContentLoaded', function() {
   rescanBtn.addEventListener('click', function() {
     performScan();
   });
+
+  controlMode.addEventListener('change', function() {
+    currentMode = controlMode.value;
+    chrome.storage.sync.set({ controlMode: currentMode });
+    applyModeRules();
+    showScanMessage(`Switched to ${getModeDisplayName(currentMode)} mode`, 'success');
+  });
+
+  function getModeDisplayName(mode) {
+    const names = {
+      'normal': 'Normal',
+      'banking': 'Banking (Strict)',
+      'social': 'Social (Balanced)',
+      'privacy': 'Privacy',
+      'developer': 'Developer (Relaxed)'
+    };
+    return names[mode] || mode;
+  }
+
+  function applyModeRules() {
+    if (discoveredScripts.length === 0) return;
+
+    // Clear current selections
+    disabledScriptIds.clear();
+
+    discoveredScripts.forEach(script => {
+      if (shouldBlockInMode(script, currentMode)) {
+        disabledScriptIds.add(script.id);
+      }
+    });
+
+    saveDisabledScripts();
+    updateTableDisplay();
+  }
+
+  function shouldBlockInMode(script, mode) {
+    switch (mode) {
+      case 'banking':
+        // Strict: Block all tracking, ads, suspicious, and third-party
+        return script.category === 'Tracking' ||
+               script.category === 'Ads' ||
+               script.category === 'Suspicious' ||
+               script.source === 'Third Party';
+
+      case 'social':
+        // Balanced: Block tracking and ads, allow functional third-party
+        return script.category === 'Tracking' ||
+               script.category === 'Ads' ||
+               script.category === 'Suspicious';
+
+      case 'privacy':
+        // Block all third-party scripts
+        return script.source === 'Third Party';
+
+      case 'developer':
+        // Relaxed: Only block obvious ads
+        return script.category === 'Ads';
+
+      case 'normal':
+      default:
+        // Don't auto-block anything
+        return false;
+    }
+  }
 
   selectAllCheckbox.addEventListener('change', function() {
     const checkboxes = scriptTableBody.querySelectorAll('input[type="checkbox"]');
@@ -136,8 +204,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (response && response.scripts) {
           discoveredScripts = response.scripts;
+          
+          // Apply mode rules if not in normal mode
+          if (currentMode !== 'normal') {
+            applyModeRules();
+          }
+          
           displayScripts(discoveredScripts);
-          scanStatus.textContent = `Found ${discoveredScripts.length} script(s)`;
+          scanStatus.textContent = `Found ${discoveredScripts.length} script(s) - Mode: ${getModeDisplayName(currentMode)}`;
         } else {
           scanStatus.textContent = 'No scripts found';
         }
